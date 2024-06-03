@@ -10,6 +10,7 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>()
 
 const isValidURL = (value: string) => {
+  if (!value.startsWith("https://news.ycombinator.com/")) return false
   try {
     new URL(value)
     return true
@@ -32,6 +33,10 @@ app.get(
 
     const comments = rawHTML.match(/<div class="commtext c00">(.*?)<\/div>/g)
 
+    const heading = rawHTML.match(/<title>(.*?)<\/title>/g)
+
+    console.log(heading)
+
     if (!comments) {
       return c.text("No comments found")
     }
@@ -43,7 +48,15 @@ app.get(
       })
     )
 
-    return c.json({ comments: sanitizedComments })
+    const topComments = sanitizedComments.slice(0, 5)
+
+    const ai = (await c.env.AI.run("@cf/meta/llama-3-8b-instruct", {
+      prompt: `Create a summary of the top comments on Hacker News which is a website where programmers share their learnings with and what they are building, heading of the article is${heading} top comments being: ${topComments.join(
+        "/n"
+      )}`,
+    })) as { response: string }
+
+    return c.json({ response: ai.response })
   }
 )
 
