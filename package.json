@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.2.2",
+    "eventsource-parser": "^1.1.2",
     "hono": "^4.4.2",
     "sanitize-html": "^2.13.0",
     "zod": "^3.23.8"
