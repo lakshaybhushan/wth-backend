@@ -55,9 +55,20 @@ app.get(
 
     const heading = rawHTML.match(/<title>(.*?)<\/title>/g)
 
+    if (!heading) {
+      return c.text("No heading found")
+    }
+
     if (!comments) {
       return c.text("No comments found")
     }
+
+    const sanitizedHeading = heading.map((h) =>
+      sanitizeHtml(h, {
+        allowedTags: [],
+        allowedAttributes: {},
+      })
+    )
 
     const sanitizedComments = comments.map((comment) =>
       sanitizeHtml(comment, {
@@ -79,9 +90,9 @@ app.get(
         eventSourceStream = (await c.env.AI.run(
           "@cf/meta/llama-3-8b-instruct",
           {
-            prompt: `Create a summary of the top comments on Hacker News which is a website where programmers share their learnings with and what they are building, heading of the article is${heading} top comments being: ${topComments.join(
-              "/n"
-            )}`,
+            prompt: `You are a content summarizer, your job is to summarize the comments of a Hacker News post. Here is the heading of the post: ${sanitizedHeading}. Here are the top 5 comments: ${topComments.join(
+              "\n"
+            )}, summarize the comments. Display the summary in a beautiful readable format using markdown.`,
             stream: true,
           }
         )) as ReadableStream
