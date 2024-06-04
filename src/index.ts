@@ -45,9 +45,9 @@ const fetchAndSanitizeData = async (hnURL: string) => {
   const res = await fetch(url)
   const rawHTML = await res.text()
 
-  const comments = rawHTML.match(/<div class="commtext c00">([\s\S]*?)<\/div>/g);
-  const heading = rawHTML.match(/<title>(.*?)<\/title>/);
-  
+  const comments = rawHTML.match(/<div class="commtext c00">([\s\S]*?)<\/div>/g)
+  const heading = rawHTML.match(/<title>(.*?)<\/title>/)
+
   if (!heading || heading.length < 1) {
     throw new Error("No heading found")
   }

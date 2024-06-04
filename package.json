@@ -7,13 +7,13 @@
   "dependencies": {
     "@hono/zod-validator": "^0.2.2",
     "eventsource-parser": "^1.1.2",
-    "hono": "^4.4.2",
+    "hono": "^4.4.3",
     "sanitize-html": "^2.13.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240529.0",
+    "@cloudflare/workers-types": "^4.20240603.0",
     "@types/sanitize-html": "^2.11.0",
-    "wrangler": "^3.57.2"
+    "wrangler": "^3.59.0"
   }
 }
