@@ -1,10 +1,10 @@
 import { zValidator } from "@hono/zod-validator"
-import { Hono } from "hono"
 import { z } from "zod"
 import sanitizeHtml from "sanitize-html"
 import { streamText } from "hono/streaming"
 import { cors } from "hono/cors"
 import { EventSourceParserStream } from "eventsource-parser/stream"
+import { Context, Hono } from "hono"
 
 type Bindings = {
   [key in keyof CloudflareBindings]: CloudflareBindings[key]
@@ -25,6 +25,7 @@ app.use(
     credentials: true,
   })
 )
+
 app.options("*", (c) => {
   return c.text("", 204)
 })
@@ -39,77 +40,98 @@ const isValidURL = (value: string) => {
   }
 }
 
+const fetchAndSanitizeData = async (hnURL: string) => {
+  const url = new URL(hnURL).toString()
+  const res = await fetch(url)
+  const rawHTML = await res.text()
+
+  const comments = rawHTML.match(/<div class="commtext c00">(.*?)<\/div>/g)
+  const heading = rawHTML.match(/<title>(.*?)<\/title>/g)
+
+  if (!heading) {
+    throw new Error("No heading found")
+  }
+
+  if (!comments) {
+    throw new Error("No comments found")
+  }
+
+  const sanitizedHeading = heading.map((h) =>
+    sanitizeHtml(h, {
+      allowedTags: [],
+      allowedAttributes: {},
+    })
+  )
+
+  const sanitizedComments = comments.map((comment) =>
+    sanitizeHtml(comment, {
+      allowedTags: [],
+      allowedAttributes: {},
+    })
+  )
+
+  return { sanitizedHeading, sanitizedComments }
+}
+
+const processInference = async (
+  c: Context<{ Bindings: Bindings }>,
+  sanitizedHeading: string[],
+  topComments: string[]
+): Promise<ReadableStream> => {
+  let eventSourceStream
+  let retryCount = 0
+  let successfulInference = false
+  let lastError
+  const MAX_RETRIES = 3
+
+  while (!successfulInference && retryCount < MAX_RETRIES) {
+    try {
+      eventSourceStream = (await c.env.AI.run("@cf/meta/llama-3-8b-instruct", {
+        prompt: `You are HackerNews simple markdown summarizer, your job is to concisely summarise comments of a Hacker News post. The format of the output that will be generated is a simple markdown content where heading is denoted through # or h1 tag and summary will be in points with their subheadings. Here is the heading of the post: ${sanitizedHeading}. Here are the comments: ${topComments.join(
+          "\n"
+        )}. REMEMBER TO BE CONCISE, and keep the output under 120 words maximum.`,
+        stream: true,
+      })) as ReadableStream
+      successfulInference = true
+    } catch (err) {
+      lastError = err
+      retryCount++
+      console.error(err)
+      console.log(`Retrying #${retryCount}...`)
+    }
+  }
+  if (!eventSourceStream) {
+    if (lastError) {
+      throw lastError
+    }
+    throw new Error("Problem with model")
+  }
+  return eventSourceStream
+}
+
 app.get(
   "/",
   zValidator("query", z.object({ hnURL: z.string().refine(isValidURL) })),
   async (c) => {
     const { hnURL } = c.req.valid("query")
 
-    const url = new URL(hnURL).toString()
-
-    const res = await fetch(url)
-
-    const rawHTML = await res.text()
-
-    const comments = rawHTML.match(/<div class="commtext c00">(.*?)<\/div>/g)
-
-    const heading = rawHTML.match(/<title>(.*?)<\/title>/g)
-
-    if (!heading) {
-      return c.text("No heading found")
+    let sanitizedHeading, sanitizedComments
+    try {
+      ;({ sanitizedHeading, sanitizedComments } = await fetchAndSanitizeData(
+        hnURL
+      ))
+    } catch (error) {
+      return c.text((error as Error).message)
     }
-
-    if (!comments) {
-      return c.text("No comments found")
-    }
-
-    const sanitizedHeading = heading.map((h) =>
-      sanitizeHtml(h, {
-        allowedTags: [],
-        allowedAttributes: {},
-      })
-    )
-
-    const sanitizedComments = comments.map((comment) =>
-      sanitizeHtml(comment, {
-        allowedTags: [],
-        allowedAttributes: {},
-      })
-    )
 
     const topComments = sanitizedComments.slice(0, 5)
 
-    let eventSourceStream
-    let retryCount = 0
-    let successfulInference = false
-    let lastError
-    const MAX_RETRIES = 3
+    const eventSourceStream = await processInference(
+      c,
+      sanitizedHeading,
+      topComments
+    )
 
-    while (successfulInference === false && retryCount < MAX_RETRIES) {
-      try {
-        eventSourceStream = (await c.env.AI.run(
-          "@cf/meta/llama-3-8b-instruct",
-          {
-            prompt: `You are a content summarizer, your job is to summarize the comments of a Hacker News post. Here is the heading of the post: ${sanitizedHeading}. Here are the top 5 comments: ${topComments.join(
-              "\n"
-            )}, summarize the comments. Display the summary in a beautiful readable format using markdown. The summary should be concise and informative yet beautifully formated.`,
-            stream: true,
-          }
-        )) as ReadableStream
-        successfulInference = true
-      } catch (err) {
-        lastError = err
-        retryCount++
-        console.error(err)
-        console.log(`Retrying #${retryCount}...`)
-      }
-    }
-    if (eventSourceStream === undefined) {
-      if (lastError) {
-        throw lastError
-      }
-      throw new Error(`Problem with model`)
-    }
     const tokenStream = eventSourceStream
       .pipeThrough(new TextDecoderStream())
       .pipeThrough(new EventSourceParserStream())
@@ -121,6 +143,36 @@ app.get(
           stream.write(data.response)
         }
       }
+    })
+  }
+)
+
+app.get(
+  "/image",
+  zValidator("query", z.object({ hnURL: z.string().refine(isValidURL) })),
+  async (c) => {
+    console.log("Request received for /generate-image")
+
+    const { hnURL } = c.req.valid("query")
+
+    let sanitizedHeading
+
+    try {
+      ;({ sanitizedHeading } = await fetchAndSanitizeData(hnURL))
+    } catch (error) {
+      return c.text((error as Error).message)
+    }
+
+    const imageResponse = await c.env.AI.run("@cf/lykon/dreamshaper-8-lcm", {
+      prompt: `Illustrative image for heading: ${sanitizedHeading}, high quality, 8k, high detail`,
+    })
+
+    console.log(sanitizedHeading)
+
+    return new Response(imageResponse, {
+      headers: {
+        "Content-Type": "image/png",
+      },
     })
   }
 )
