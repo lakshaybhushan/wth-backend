@@ -45,13 +45,12 @@ const fetchAndSanitizeData = async (hnURL: string) => {
   const res = await fetch(url)
   const rawHTML = await res.text()
 
-  const comments = rawHTML.match(/<div class="commtext c00">(.*?)<\/div>/g)
-  const heading = rawHTML.match(/<title>(.*?)<\/title>/g)
-
-  if (!heading) {
+  const comments = rawHTML.match(/<div class="commtext c00">([\s\S]*?)<\/div>/g);
+  const heading = rawHTML.match(/<title>(.*?)<\/title>/);
+  
+  if (!heading || heading.length < 1) {
     throw new Error("No heading found")
   }
-
   if (!comments) {
     throw new Error("No comments found")
   }
@@ -87,9 +86,9 @@ const processInference = async (
   while (!successfulInference && retryCount < MAX_RETRIES) {
     try {
       eventSourceStream = (await c.env.AI.run("@cf/meta/llama-3-8b-instruct", {
-        prompt: `You are HackerNews simple markdown summarizer, your job is to concisely summarise comments of a Hacker News post. The format of the output that will be generated is a simple markdown content where heading is denoted through # or h1 tag and summary will be in points with their subheadings. Here is the heading of the post: ${sanitizedHeading}. Here are the comments: ${topComments.join(
+        prompt: `You are HackerNews simple markdown summarizer, your job is to summarise comments of a Hacker News post. The format of the output that will be generated is a simple markdown content where heading is denoted through # or h1 tag and summary will be in points with their subheadings in detailed manner. Here is the heading of the post: ${sanitizedHeading}. Here are the comments: ${topComments.join(
           "\n"
-        )}. REMEMBER TO BE CONCISE, and keep the output under 120 words maximum.`,
+        )}. DON'T ADD LINKS OR IMAGES. DON'T ADD ANYTHING ELSE.`,
         stream: true,
       })) as ReadableStream
       successfulInference = true
