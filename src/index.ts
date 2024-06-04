@@ -92,7 +92,7 @@ app.get(
           {
             prompt: `You are a content summarizer, your job is to summarize the comments of a Hacker News post. Here is the heading of the post: ${sanitizedHeading}. Here are the top 5 comments: ${topComments.join(
               "\n"
-            )}, summarize the comments. Display the summary in a beautiful readable format using markdown.`,
+            )}, summarize the comments. Display the summary in a beautiful readable format using markdown. The summary should be concise and informative yet beautifully formated.`,
             stream: true,
           }
         )) as ReadableStream
