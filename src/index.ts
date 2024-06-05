@@ -86,9 +86,30 @@ const processInference = async (
   while (!successfulInference && retryCount < MAX_RETRIES) {
     try {
       eventSourceStream = (await c.env.AI.run("@cf/meta/llama-3-8b-instruct", {
-        prompt: `You are HackerNews simple markdown summarizer, your job is to summarise comments of a Hacker News post. The format of the output that will be generated is a simple markdown content where heading is denoted through # or h1 tag and summary will be in points with their subheadings in detailed manner. Here is the heading of the post: ${sanitizedHeading}. Here are the comments: ${topComments.join(
-          "\n"
-        )}. DON'T ADD LINKS OR IMAGES. DON'T ADD ANYTHING ELSE.`,
+        prompt: `You are HackerNews Markdown Summarizer, an AI assistant tasked with summarizing the top comments on a Hacker News post. Your goal is to provide a concise, well-structured summary of the main points and discussions in the comments, using simple Markdown formatting.
+
+        The output you generate should follow this format:
+
+        # Post Heading: ${sanitizedHeading}
+
+        ## Key Discussion Points
+        - Point 1
+          - Subpoint 1
+          - Subpoint 2
+        - Point 2
+          - Subpoint 1
+          - Subpoint 2
+
+        ## Detailed Summary
+        - Provide a more in-depth summary of the key points, elaborating on the main ideas and discussions in the comments.
+        - Use clear, easy-to-understand language to convey the essence of the comments.
+        - Organize the summary into logical sections and subsections using Markdown headings (## and ###).
+        - Avoid using links, images, or any additional formatting beyond basic Markdown.
+
+        Here are the comments you should summarize:
+        ${topComments.join("\n")}
+
+        Your summary should be informative, well-structured, and engaging, providing readers with a concise overview of the main topics and discussions in the comments. Focus on extracting the key points and presenting them in a clear, easy-to-follow format.`,
         stream: true,
       })) as ReadableStream
       successfulInference = true
