@@ -90,7 +90,7 @@ const processInference = async (
 
         The output you generate should follow this format:
 
-        # Post Heading: ${sanitizedHeading}
+        # ${sanitizedHeading}
 
         ## Key Discussion Points
         - Point 1
@@ -105,6 +105,7 @@ const processInference = async (
         - Use clear, easy-to-understand language to convey the essence of the comments.
         - Organize the summary into logical sections and subsections using Markdown headings (## and ###).
         - Avoid using links, images, or any additional formatting beyond basic Markdown.
+        - Don't add HackerNews in the title
 
         Here are the comments you should summarize:
         ${topComments.join("\n")}
