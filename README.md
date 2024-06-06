@@ -42,4 +42,3 @@ bun run deploy
 
 
 Thank you! 🚀
-```
